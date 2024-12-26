@@ -1,1 +1,16 @@
 # DebugSimpleAsm
+用64位进程的调试器调试x86的程序(Wow64)
+## 核心
+
+兼容x86的异常断点 STATUS_WX86_BREAKPOINT EQU 4000001Fh
+兼容x86的异常单步 STATUS_WX86_SINGLE_STEP EQU 4000001Eh
+
+获取x86线程Context的函数
+Wow64GetThreadContext
+Wow64SetThreadContext
+
+# 关于x86程序（Wow64）的PEB
+兼容型的x86进程拥有两个PEB，一个是64位的用于模拟环境的， 一个是PEB32自身的
+通过 NtQueryInformationProcess或 ZwQueryInformationProcess 查询ProcessBasicInformation值
+得到的PEB是64位的，在win10 19045.4780版本下 PEB64在PEB32的-0x1000位置
+所有要获取PEB32需要在PEB64的地址上+0x1000得到PEB32的起始位置
