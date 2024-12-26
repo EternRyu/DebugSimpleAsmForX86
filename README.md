@@ -4,6 +4,8 @@
 
 兼容x86的异常断点 STATUS_WX86_BREAKPOINT EQU 4000001Fh</br>
 兼容x86的异常单步 STATUS_WX86_SINGLE_STEP EQU 4000001Eh</br>
+MSDN相关连接：</br>
+https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55
 
 获取x86线程Context的函数</br>
 Wow64GetThreadContext</br>
