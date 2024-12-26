@@ -1,7 +1,11 @@
 # DebugSimpleAsm
 用64位进程的调试器调试x86的程序(Wow64)</br>
 ## 核心
+用64位进程调试兼容x86程序时不能使用常规异常值！！！
+EXCEPTION_BREAKPOINT EQU 080000003h</br>
+EXCEPTION_SINGLE_STEP EQU 080000004h</br>
 
+需要使用的是：</br>
 兼容x86的异常断点 STATUS_WX86_BREAKPOINT EQU 4000001Fh</br>
 兼容x86的异常单步 STATUS_WX86_SINGLE_STEP EQU 4000001Eh</br>
 MSDN相关连接：</br>
