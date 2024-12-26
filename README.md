@@ -21,4 +21,4 @@ Wow64SetThreadContext</br>
 查询ProcessBasicInformation值得到的PEB是64位的</br>
 在win10 19045.4780版本下 PEB64在PEB32的-0x1000位置</br>
 所以要获取PEB32需要在PEB64的地址上+0x1000得到PEB32的起始位置</br>
-获得PEB32后按着PEB32位的格式解析即可 注意指针长度位4byte，使用的结构都是32位的
+获得PEB32后按着PEB32位的格式解析即可 注意指针长度为4byte，使用的结构都是32位的
