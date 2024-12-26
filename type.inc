@@ -674,5 +674,5 @@ MemBreakPointInfo struct
   old_type      dword 0
   bp_length     dword 0
   rxw_type      dword 0
-  dword 0
+  set_type      dword 0
 MemBreakPointInfo ends

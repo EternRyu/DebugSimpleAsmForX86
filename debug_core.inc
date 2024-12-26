@@ -27,6 +27,7 @@ string_line_feed db 0dh,0ah,0
 string_line_db db " %02X",0
 string_line_dd db " %08lX",0
 string_line_dq db " %016llX",0
+string_int3_print db "BreakePoint:%016llX",0dh,0ah,0
 ;===============================================================
 ;显示寄存器字符串
 
@@ -64,6 +65,14 @@ string_cmd_bp_symbol db  "bp",0
 string_cmd_bpm_symbol db  "bpm",0
 string_cmd_bph_symbol db  "bph",0
 
+string_cmd_bl_symbol db  "bl",0
+string_cmd_bml_symbol db  "bml",0
+string_cmd_bhl_symbol db  "bhl",0
+
+string_cmd_bc_symbol db  "bc",0
+string_cmd_bmc_symbol db  "bmc",0
+string_cmd_bhc_symbol db  "bhc",0
+
 string_cmd_db_symbol db  "db",0
 string_cmd_dd_symbol db  "dd",0
 string_cmd_dq_symbol db  "dq",0
@@ -82,7 +91,7 @@ string_cmd_lm_symbol db  "lm",0
 
 string_cmd_dump_symbol db  "dump",0
 ;命令结构数组
-cmd_map COMMAND 20 dup(<0>)
+cmd_map COMMAND 30 dup(<0>)
 
 ;===============================================================
 
@@ -95,6 +104,7 @@ g_step_flag db 0
 ;恢复内存断点相关
 g_restore_mem_bp_flag db 0
 g_restore_mem_page_base qword 0
+g_restore_mem_page_type qword 0
 ;内存断点相关
 g_mem_bp_address_arr MemBreakPointInfo 5 dup (<>)
 g_mem_bp_count dword 0
@@ -108,6 +118,11 @@ g_mem_bp_address qword 0
 g_hardware_int3_flag db 0
 g_hardware_lg_flag byte 0
 g_hardware_reg_index dword 0
+
+string_show_dr0 db "DR0:%016llX",0dh,0ah,0
+string_show_dr1 db "DR1:%016llX",0dh,0ah,0
+string_show_dr2 db "DR2:%016llX",0dh,0ah,0
+string_show_dr3 db "DR3:%016llX",0dh,0ah,0
 ;===========
 
 ;===========
@@ -277,6 +292,43 @@ InitCMDMap PROC
   lea rax,CmdDumpPE
   mov cmd_map[120h].pfn,rax
 
+  ;bc命令
+  lea rax,string_cmd_bc_symbol
+  mov cmd_map[130h].cmd,rax
+  lea rax,CmdDelInt3BreakePoint
+  mov cmd_map[130h].pfn,rax
+
+  ;bl命令
+  lea rax,string_cmd_bl_symbol
+  mov cmd_map[140h].cmd,rax
+  lea rax,CmdShowInt3BreakePoint
+  mov cmd_map[140h].pfn,rax
+
+  ;bhc命令
+  lea rax,string_cmd_bhc_symbol
+  mov cmd_map[150h].cmd,rax
+  lea rax,CmdDelHardwareBreakePoint
+  mov cmd_map[150h].pfn,rax
+
+  ;bhl命令
+  lea rax,string_cmd_bhl_symbol
+  mov cmd_map[160h].cmd,rax
+  lea rax,CmdShowHardwareBreakePoint
+  mov cmd_map[160h].pfn,rax
+
+  ;bmc命令
+  lea rax,string_cmd_bmc_symbol
+  mov cmd_map[170h].cmd,rax
+  lea rax,CmdDelMemoryBreakePoint
+  mov cmd_map[170h].pfn,rax
+
+  ;bml命令
+  lea rax,string_cmd_bml_symbol
+  mov cmd_map[180h].cmd,rax
+  lea rax,CmdShowMemoryBreakePoint
+  mov cmd_map[180h].pfn,rax
+  
+
   add rsp,8
   ret
 InitCMDMap ENDP
@@ -417,6 +469,7 @@ EXIT_CMDSHOWREGISTER:
   pop rdi
   ret
 CmdShowRegister ENDP
+
 ;===============================================================
 ;bp命令封装
 ;CmdShowDisassembly(char* address_str)
@@ -478,6 +531,80 @@ EXIT_CMDINT3BREAKEPOINT:
   pop rdi
   ret
 CmdInt3BreakePoint ENDP
+
+;===============================================================
+;bc命令封装
+;CmdDelInt3BreakePoint(char* address_str)
+;===============================================================
+CmdDelInt3BreakePoint PROC
+local address_ptr:ptr qword
+local address:qword
+  push rdi
+  push rsi
+  sub rsp,60h
+  mov address_ptr,rcx
+  test rcx,rcx
+  je EXIT_CMDDELINT3BREAKEPOINT
+  mov al,byte ptr[rcx]
+  test al,al
+  je EXIT_CMDDELINT3BREAKEPOINT
+  mov r8,10h
+  mov rdx,0
+  mov rcx,address_ptr
+  call strtoull
+  ;cmp rax,0
+  ;jl EXIT_CMDINT3BREAKEPOINT
+  mov address,rax
+  mov rcx,address
+  call DelInt3BreakPoint
+EXIT_CMDDELINT3BREAKEPOINT:
+  mov rax,TRUE
+  add rsp,60h
+  pop rsi
+  pop rdi
+  ret
+CmdDelInt3BreakePoint ENDP
+
+;===============================================================
+;bl命令封装
+;CmdShowInt3BreakePoint()
+;===============================================================
+CmdShowInt3BreakePoint PROC
+  push rdi
+  push rsi
+  sub rsp,58h
+
+  ;遍历
+  ;sizeof(g_Commands) / sizeof(g_Commands[0]
+  mov rax,sizeof break_point_int3
+  cqo
+  mov rdi,sizeof BreakPointInfo
+  idiv rdi
+  mov rsi,rax
+  dec rsi
+LOOP_GET_BP_ARR:
+  ;lea rax,[rcx-1]
+  mov rax,rsi
+  imul rax,rdi
+  lea rdx,break_point_int3
+  mov r9b,byte ptr[rdx+rax+BreakPointInfo.efficacious]
+  cmp r9b,TRUE
+  jne GET_NEXT_BP_ARR
+  mov rdx,qword ptr[rdx+rax+BreakPointInfo.break_address]
+  lea rcx,string_int3_print
+  call printf
+
+GET_NEXT_BP_ARR:
+  dec rsi
+  jne LOOP_GET_BP_ARR
+
+EXIT_CMDSHOWINT3BREAKEPOINT:
+  mov rax,TRUE
+  add rsp,58h
+  pop rsi
+  pop rdi
+  ret
+CmdShowInt3BreakePoint ENDP
 
 ;===============================================================
 ;bpm 命令封装
@@ -562,6 +689,193 @@ EXIT_CMDMEMORYBREAKEPOINT:
 CmdMemoryBreakePoint ENDP
 
 ;===============================================================
+;bmc 命令封装
+;CmdDelMemoryBreakePoint()
+;===============================================================
+CmdDelMemoryBreakePoint PROC
+local address_ptr:ptr qword
+local address:qword
+local process_handle:HANDLE
+local old_page_type:qword
+local page_base:qword
+local bool_ret:dword
+local page_index:dword
+  push rdi
+  push rsi
+  sub rsp,60h
+  mov page_index,0
+  mov page_base,0
+  mov address_ptr,rcx
+  test rcx,rcx
+  je EXIT_CMDDELMEMORYBREAKEPOINT
+  mov al,byte ptr[rcx]
+  test al,al
+  je EXIT_CMDDELMEMORYBREAKEPOINT
+  mov r8,10h
+  mov rdx,0
+  mov rcx,address_ptr
+  call strtoull
+  ;cmp rax,0
+  ;jl EXIT_CMDINT3BREAKEPOINT
+  mov address,rax
+  ;查找相同页
+  mov rax,sizeof g_mem_bp_address_arr
+  cqo
+  mov rdi,sizeof MemBreakPointInfo
+  idiv rdi
+  mov rsi,rax
+  dec rsi
+LOOP_CMP_BREAK0:
+  ;查找数组
+  lea rax,g_mem_bp_address_arr
+  mov r9,rsi
+  imul r9,rdi
+  xor rdx,rdx
+  mov edx,dword ptr [rax+r9+MemBreakPointInfo.set_type]
+  cmp edx,0
+  je CMP_NEXT_BREAK0
+  xor rdx,rdx
+  mov edx,dword ptr [rax+r9+MemBreakPointInfo.page_base]
+  mov r8,address
+  and r8,0FFFFFFFFFFFFF000h
+  cmp rdx,r8
+  jne CMP_NEXT_BREAK0
+  inc page_index
+
+  CMP_NEXT_BREAK0:
+  dec rsi
+  jne LOOP_CMP_BREAK0
+
+
+  mov rax,sizeof g_mem_bp_address_arr
+  cqo
+  mov rdi,sizeof MemBreakPointInfo
+  idiv rdi
+  mov rsi,rax
+  dec rsi
+LOOP_CMP_BREAK:
+  ;查找数组
+  lea rax,g_mem_bp_address_arr
+  mov r9,rsi
+  imul r9,rdi
+  xor rdx,rdx
+  mov edx,dword ptr [rax+r9+MemBreakPointInfo.set_type]
+  cmp edx,0
+  je CMP_NEXT_BREAK
+  mov rdx,qword ptr [rax+r9+MemBreakPointInfo.break_address]
+  cmp rdx,address
+  jne CMP_NEXT_BREAK
+  cmp page_index,1
+  jg DEL_MEM_BP
+
+  ;还原页
+  xor r8,r8
+  mov r8d,debug_event.dwProcessId
+  mov rdx,FALSE
+  mov rcx,PROCESS_ALL_ACCESS
+  call OpenProcess
+  ;hProcess == NULL
+  test rax,rax
+  je EXIT_CMDDELMEMORYBREAKEPOINT
+  mov process_handle,rax
+
+  lea rax,g_mem_bp_address_arr
+  mov r9,rsi
+  imul r9,rdi
+  xor rdx,rdx
+  mov edx,dword ptr [rax+r9+MemBreakPointInfo.old_type]
+
+  lea rax,old_page_type
+  push rax
+  sub rsp,20h
+  mov r9,rdx
+  mov r8,1000h
+  mov rdx,address
+  mov rcx,process_handle
+  call VirtualProtectEx 
+  add rsp,28h
+  mov bool_ret,eax
+  mov rcx,process_handle
+  call CloseHandle
+  cmp bool_ret,0
+  je EXIT_CMDDELMEMORYBREAKEPOINT
+  ;删除还原操作
+  mov r8,address
+  and r8,0FFFFFFFFFFFFF000h
+  cmp g_restore_mem_page_base,r8
+  jne DEL_MEM_BP
+  mov g_restore_mem_bp_flag,-1
+  mov g_restore_mem_page_type,0
+
+DEL_MEM_BP:
+  ;删除断点
+  lea rax,g_mem_bp_address_arr
+  mov r9,rsi
+  imul r9,rdi
+  xor rdx,rdx
+  mov qword ptr [rax+r9+MemBreakPointInfo.break_address],0
+  mov dword ptr [rax+r9+MemBreakPointInfo.page_base],0
+  mov dword ptr [rax+r9+MemBreakPointInfo.old_type],0
+  mov dword ptr [rax+r9+MemBreakPointInfo.bp_length],0
+  mov dword ptr [rax+r9+MemBreakPointInfo.rxw_type],0
+  mov dword ptr [rax+r9+MemBreakPointInfo.set_type],0
+  dec g_mem_bp_count
+  jmp EXIT_CMDDELMEMORYBREAKEPOINT
+
+  CMP_NEXT_BREAK:
+  dec rsi
+  jne LOOP_CMP_BREAK
+
+EXIT_CMDDELMEMORYBREAKEPOINT:
+  mov rax,TRUE
+  add rsp,60h
+  pop rsi
+  pop rdi
+  ret
+CmdDelMemoryBreakePoint ENDP
+
+;===============================================================
+;bml 命令封装
+;CmdShowMemoryBreakePoint()
+;===============================================================
+CmdShowMemoryBreakePoint PROC
+  push rdi
+  push rsi
+  sub rsp,58h
+
+
+  mov rax,sizeof g_mem_bp_address_arr
+  cqo
+  mov rdi,sizeof MemBreakPointInfo
+  idiv rdi
+  mov rsi,rax
+  dec rsi
+LOOP_CMP_BREAK:
+  ;查找数组
+  lea rax,g_mem_bp_address_arr
+  mov r9,rsi
+  imul r9,rdi
+  xor rdx,rdx
+  mov edx,dword ptr [rax+r9+MemBreakPointInfo.set_type]
+  cmp edx,0
+  je CMP_NEXT_BREAK
+  mov rdx,qword ptr [rax+r9+MemBreakPointInfo.break_address]
+  lea rcx,string_int3_print
+  call printf
+
+  CMP_NEXT_BREAK:
+  dec rsi
+  jne LOOP_CMP_BREAK
+
+EXIT_CMDSHOWMEMORYBREAKEPOINT:
+  mov rax,TRUE
+  add rsp,58h
+  pop rsi
+  pop rdi
+  ret
+CmdShowMemoryBreakePoint ENDP
+
+;===============================================================
 ;bph 命令封装
 ;CmdHardwareBreakePoint(char* str)
 ;===============================================================
@@ -632,6 +946,86 @@ EXIT_CMDHARDWAREBREAKEPOINT:
   pop rdi
   ret
 CmdHardwareBreakePoint ENDP
+
+;===============================================================
+;bhc命令封装
+;CmdDelHardwareBreakePoint()
+;===============================================================
+CmdDelHardwareBreakePoint PROC
+local ctx:CONTEXT32
+  push rdi
+  push rsi
+  sub rsp,60h
+
+  ;获取线程上下文
+  mov ctx.ContextFlags,WOW64_CONTEXT_ALL
+  lea rcx,ctx
+  call GetDebugThreadContext
+  
+  ;清除寄存器
+
+  mov ctx.Dr0@,0
+  mov ctx.Dr1@,0
+  mov ctx.Dr2@,0
+  mov ctx.Dr3@,0
+  mov ctx.Dr7@,0
+  ;不还原
+  mov g_hardware_int3_flag,-1
+  ;设置线程上下文
+  lea rcx,ctx
+  call SetDebugThreadContext
+  
+EXIT_CMDDELHARDWAREBREAKEPOINT:
+  mov rax,TRUE
+  add rsp,60h
+  pop rsi
+  pop rdi
+  ret
+CmdDelHardwareBreakePoint ENDP
+
+;===============================================================
+;bhl命令封装
+;CmdShowHardwareBreakePoint()
+;===============================================================
+CmdShowHardwareBreakePoint PROC
+local ctx:CONTEXT32
+  push rdi
+  push rsi
+  sub rsp,60h
+
+  ;获取线程上下文
+  mov ctx.ContextFlags,WOW64_CONTEXT_ALL
+  lea rcx,ctx
+  call GetDebugThreadContext
+  
+  ;显示寄存器
+  xor rdx,rdx
+  mov edx,ctx.Dr0@
+  lea rcx,string_show_dr0
+  call printf
+
+  xor rdx,rdx
+  mov edx,ctx.Dr1@
+  lea rcx,string_show_dr1
+  call printf
+
+  xor rdx,rdx
+  mov edx,ctx.Dr2@
+  lea rcx,string_show_dr2
+  call printf
+
+  xor rdx,rdx
+  mov edx,ctx.Dr3@
+  lea rcx,string_show_dr3
+  call printf
+
+EXIT_CMDSHOWHARDWAREBREAKEPOINT:
+  mov rax,TRUE
+  add rsp,60h
+  pop rsi
+  pop rdi
+  ret
+CmdShowHardwareBreakePoint ENDP
 
 ;===============================================================
 ;DB 命令封装
@@ -1386,11 +1780,11 @@ local old_code:byte
   cqo
   mov rdi,sizeof BreakPointInfo
   idiv rdi
-  mov rcx,rax
-  dec rcx
+  mov rsi,rax
+  dec rsi
 LOOP_GET_BP_ARR:
   ;lea rax,[rcx-1]
-  mov rax,rcx
+  mov rax,rsi
   imul rax,rdi
   lea rdx,break_point_int3
   mov r9,qword ptr[rdx+rax+BreakPointInfo.break_address] 
@@ -1402,24 +1796,42 @@ LOOP_GET_BP_ARR:
   je NOT_USING; efficacious = 0
   ;还原软件断点位置
   mov r8,1
+  mov rcx,qword ptr[rdx+rax+BreakPointInfo.break_address] 
   mov dl,byte ptr[rdx+rax+BreakPointInfo.old_code] 
   mov old_code,dl
   lea rdx,old_code
-  mov rcx,qword ptr[rdx+rax+BreakPointInfo.break_address] 
   call WriteDebugProcessMemory
   test rax,rax
   je EXIT_DELINT3BREAKPOINT
 
   ;不在使用中
 NOT_USING:
+  mov rax,rsi
+  imul rax,rdi
+  lea rdx,break_point_int3
+  mov r9,qword ptr[rdx+rax+BreakPointInfo.break_address] 
   mov byte ptr[rdx+rax+BreakPointInfo.using],0
   mov byte ptr[rdx+rax+BreakPointInfo.efficacious],0
   mov byte ptr[rdx+rax+BreakPointInfo.old_code],0
   mov qword ptr[rdx+rax+BreakPointInfo.break_address],0
   dec break_point_int3_count
+  ;判断是否等待还原
+
+  mov rax,g_restore_int3_bp_arrr_ptr
+  test rax,rax
+  je EXIT_DELINT3BREAKPOINT
+  lea r8,[rax+BreakPointInfo.old_code]
+  mov rdx,qword ptr [rax + BreakPointInfo.break_address]
+  cmp rdx,break_address
+  jne EXIT_DELINT3BREAKPOINT
+  ;设置不还原
+  mov g_restore_int3_bp_arrr_ptr,0
+  mov g_restore_int3_flag,-1
   jmp EXIT_DELINT3BREAKPOINT
+
 GET_NEXT_BP_ARR:
-loop LOOP_GET_BP_ARR
+  dec rsi
+  jne LOOP_GET_BP_ARR
 
 EXIT_DELINT3BREAKPOINT:
   add rsp,60h
@@ -1591,10 +2003,18 @@ CMP_NEXT_BREAK:
 
   ;设置断点
 SET_MEM_BREAKE:
+
+  cmp page_type,1
+  jne SET_PAGE_NOACCESS
+  mov rsi,PAGE_EXECUTE_READ
+  jmp EDIT_MEM
+SET_PAGE_NOACCESS:
+  mov rsi,PAGE_NOACCESS
+EDIT_MEM:
   lea rax,old_page_type
   push rax
   sub rsp,20h
-  mov r9,PAGE_NOACCESS
+  mov r9,rsi
   mov r8,length_bp
   mov rdx,address
   mov rcx,process_handle
@@ -1647,8 +2067,8 @@ LOOP_SEARCH_EMPTY_NODE:
   mov dword ptr [rax+r9+MemBreakPointInfo.bp_length],r8d
   mov r8d,page_type
   mov dword ptr [rax+r9+MemBreakPointInfo.rxw_type],r8d
-
-
+  mov dword ptr [rax+r9+MemBreakPointInfo.set_type],esi
+  
   jmp EXIT_SETMEMORYBREAKEPOINT
 
 SEARCH_NEXT_NODE:
@@ -1753,6 +2173,8 @@ CRAFT_ARGUMENT:
   and rax,1
   test rax,rax
   jne DR7_L0_NOT_NULL
+  cmp ctx.Dr0@,0
+  jne DR7_L0_NOT_NULL
   mov rax,address
   mov ctx.Dr0@,eax
   ;dr7.fields.l0 = in
@@ -1807,7 +2229,8 @@ DR7_L0_NOT_NULL:
   and rax,4
   test rax,rax
   jne DR7_L1_NOT_NULL
-
+  cmp ctx.Dr1@,0
+  jne DR7_L1_NOT_NULL
   mov rax,address
   mov ctx.Dr1@,eax
 
@@ -1862,6 +2285,8 @@ DR7_L1_NOT_NULL:
   and rax,10h
   test rax,rax
   jne DR7_L2_NOT_NULL
+  cmp ctx.Dr2@,0
+  jne DR7_L2_NOT_NULL
   mov rax,address
   mov ctx.Dr2@,eax
 
@@ -1914,6 +2339,8 @@ DR7_L2_NOT_NULL:
   mov eax,ctx.Dr7@
   and rax,40h
   test rax,rax
+  jne DR7_L3_NOT_NULL
+  cmp ctx.Dr3@,0
   jne DR7_L3_NOT_NULL
   mov rax,address
   mov ctx.Dr3@,eax
@@ -2040,7 +2467,7 @@ local status:dword
   push  rsi
   ;push rbp
   ;mov rbp,rsp
-  sub rsp,58h
+  sub rsp,60h
   mov status,DBG_EXCEPTION_NOT_HANDLED
   mov exception_record,0
   mov break_point_ptr,0
@@ -2227,7 +2654,7 @@ SHOW_CMD:
 EXIT_EXCEPTIONBREAKPOINT:
   mov eax,status
   ;leave 
-  add rsp,58h
+  add rsp,60h
   pop rsi
   pop rdi
   ret
@@ -2321,7 +2748,9 @@ RECOVER_MEM_PAGE_TYPE:
   ;设置单步断点
   mov g_restore_mem_bp_flag,TRUE
   call SetSingelStep  
-
+  xor rax,rax
+  mov eax,recover_page_type
+  mov g_restore_mem_page_type,rax
   mov rsi,g_restore_mem_page_base
   mov rax,sizeof g_mem_bp_address_arr
   cqo
@@ -2404,6 +2833,12 @@ local ret_opcode:qword
   call GetDebugThreadContext
   test rax,rax
   je EXIT_EXCEPTIONSINGELSTEP
+  ;取消还原内存断点
+  cmp g_restore_mem_bp_flag,-1
+  jne IS_R_MEMBP
+  mov status,DBG_CONTINUE
+  mov g_restore_mem_bp_flag,FALSE
+IS_R_MEMBP:
   ;是内存断点要还原
   cmp g_restore_mem_bp_flag,TRUE
   jne NEXT_FUN@7
@@ -2423,8 +2858,8 @@ local ret_opcode:qword
   lea rax,old_page_type
   push rax
   sub rsp,20h
-  xor r9,r9
-  mov r9d,PAGE_NOACCESS
+  ;xor r9,r9
+  mov r9,g_restore_mem_page_type
   xor r8,r8
   mov r8d,1000h
   mov rdx,g_restore_mem_page_base
@@ -2437,7 +2872,13 @@ local ret_opcode:qword
   mov status,DBG_CONTINUE
 
   NEXT_FUN@7:
-  ;是硬件读写断点要还原
+  ;取消还原硬件断点
+  cmp g_hardware_int3_flag,-1
+  jne IS_R_BPH
+  mov g_hardware_int3_flag,FALSE
+  mov status,DBG_CONTINUE
+IS_R_BPH:
+  ;是硬件读执行点要还原
   cmp g_hardware_int3_flag,TRUE
   jne NEXT_FUN@4
   mov ctx.ContextFlags,WOW64_CONTEXT_ALL
@@ -2459,9 +2900,21 @@ local ret_opcode:qword
   mov ctx.Dr7@,r8d
   lea rcx,ctx
   call SetDebugThreadContext
-  mov status,DBG_CONTINUE
-NEXT_FUN@4:
 
+  ;mov rdx,1
+  ;xor rcx,rcx
+  ;mov ecx,ctx.Eip
+  ;call DisassemblyForAddress
+  ;call GetCommandLine
+  mov status,DBG_CONTINUE
+
+NEXT_FUN@4:
+  ;取消还原软件断点
+  cmp g_restore_int3_flag,-1
+  jne IS_R_INT3BP
+  mov g_restore_int3_flag,FALSE
+  mov status,DBG_CONTINUE
+IS_R_INT3BP:
   ;是软件断点要还原断点
   cmp g_restore_int3_flag,TRUE
   jne NEXT_FUN@1
@@ -2573,6 +3026,8 @@ SET_CTX:
   call SetDebugThreadContext  
   mov g_hardware_int3_flag,TRUE
   call SetSingelStep  
+  mov status,DBG_CONTINUE
+
 NOT_EXECUTE_BREAKE_POINT:
   mov rdx,1
   xor rcx,rcx
